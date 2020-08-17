@@ -197,10 +197,8 @@ public final class MessageFetchContext {
         Map<TopicPartition, CompletableFuture<Entry>> readFutures = readAllCursorOnce(cursors);
         CompletableFuture.allOf(readFutures.values().stream().toArray(CompletableFuture<?>[]::new))
             .whenComplete((ignore, ex) -> {
-                // keep entries since all read completed.
-                readFutures.entrySet().parallelStream().forEach(kafkaTopicReadEntry -> {
-                    TopicPartition kafkaTopic = kafkaTopicReadEntry.getKey();
-                    CompletableFuture<Entry> readEntry = kafkaTopicReadEntry.getValue();
+                // keep entries since all read completed. currently only read 1 entry each time.
+                readFutures.forEach((kafkaTopic, readEntry) -> {
                     try {
                         Entry entry = readEntry.get();
                         List<Entry> entryList = responseValues.computeIfAbsent(kafkaTopic, l -> Lists.newArrayList());
@@ -277,10 +275,9 @@ public final class MessageFetchContext {
                     }
 
                     AtomicBoolean allPartitionsNoEntry = new AtomicBoolean(true);
-                    responseValues.entrySet().parallelStream().forEach(responseEntrys -> {
-                        final PartitionData partitionData;
-                        TopicPartition kafkaPartition = responseEntrys.getKey();
-                        List<Entry> entries = responseEntrys.getValue();
+                    responseValues.forEach((kafkaPartition, entries) -> {
+                        final FetchResponse.PartitionData partitionData;
+
                         // Add cursor and offset back to TCM when all the read completed.
                         TopicName pulsarTopicName = pulsarTopicName(kafkaPartition, requestHandler.getNamespace());
                         Pair<ManagedCursor, Long> pair = cursors.get(kafkaPartition);
